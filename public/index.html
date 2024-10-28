@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pool Table Queue</title>
+</head>
+<body>
+    <h1>Pool Table Queue</h1>
+    <!-- Changed <ul> to <ol> to show numbers instead of bullets -->
+    <ol id="queueList"></ol>
+    <input type="text" id="nameInput" placeholder="Enter your name">
+    
+    <!-- Admin login elements -->
+    <input type="password" id="passwordInput" placeholder="Admin Password">
+    <button onclick="verifyAdmin()">Enter</button>
+    <p id="errorMessage" style="color: red; display: none;">Incorrect Password</p>
+
+    <!-- Buttons for queue management -->
+    <button id="addButton" onclick="addToQueue()">Add to Queue</button>
+    <button id="removeButton" onclick="removeFromQueue()">Remove from Queue</button>
+
+    <script>
+        let isAdmin = false; // Tracks if the user is in admin mode
+        const adminPassword = "123"; // Set your admin password here
+        let userAdded = false;
+
+        async function fetchQueue() {
+            const response = await fetch('/queue');
+            const queue = await response.json();
+            document.getElementById('queueList').innerHTML = queue.map(name => `<li>${name}</li>`).join('');
+
+            // Check if the user's name is already in the queue
+            const name = document.getElementById('nameInput').value;
+            if (queue.includes(name) && !isAdmin) {
+                disableButtons();
+            }
+        }
+
+        function disableButtons() {
+            document.getElementById('addButton').style.display = 'none';
+            document.getElementById('removeButton').style.display = 'none';
+            userAdded = true;
+        }
+
+        function enableButtons() {
+            document.getElementById('addButton').style.display = 'block';
+            document.getElementById('removeButton').style.display = 'block';
+            userAdded = false;
+        }
+
+        async function addToQueue() {
+            const name = document.getElementById('nameInput').value;
+            if (name && !userAdded) {
+                await fetch('/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, admin: isAdmin, password: isAdmin ? adminPassword : '' })
+                });
+                fetchQueue();
+                if (!isAdmin) disableButtons(); // Disable buttons if not an admin
+            }
+        }
+
+        async function removeFromQueue() {
+            const name = document.getElementById('nameInput').value;
+            if (name) {
+                await fetch('/remove', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, admin: isAdmin, password: isAdmin ? adminPassword : '' })
+                });
+                fetchQueue();
+                if (!isAdmin) enableButtons(); // Re-enable buttons for user
+            }
+        }
+
+        // Verify admin password function
+        function verifyAdmin() {
+            const enteredPassword = document.getElementById('passwordInput').value;
+
+            if (enteredPassword === adminPassword) {
+                isAdmin = true;
+                document.getElementById('errorMessage').style.display = 'none';
+                document.getElementById('passwordInput').style.display = 'none';
+                document.querySelector('button[onclick="verifyAdmin()"]').style.display = 'none';
+                document.getElementById('nameInput').placeholder = "Enter name to edit queue";
+            } else {
+                isAdmin = false;
+                document.getElementById('errorMessage').style.display = 'block';
+            }
+        }
+
+        fetchQueue();
+        setInterval(fetchQueue, 2000); // Refresh every 2 seconds for real-time updates
+    </script>
+</body>
+</html>
