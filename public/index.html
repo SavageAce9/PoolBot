@@ -82,7 +82,7 @@
             margin-top: 30px;
         }
 
-        button[onclick="verifyAdmin()"] {
+        button[onclick="verifyAdmin()"], button[onclick="exitAdmin()"] {
             background-color: #6c757d;
         }
 
@@ -102,14 +102,18 @@
 
         <!-- Queue management controls -->
         <input type="text" id="nameInput" placeholder="Enter your name">
+        <p id="userMessage" style="display: none; font-size: 18px; color: green;"></p>
         <button id="addButton" onclick="addToQueue()">Add to Queue</button>
-        <button id="removeButton" onclick="removeFromQueue()">Remove from Queue</button>
         <button id="nextPlayerButton" onclick="removeTopPlayer()">Next Player</button> <!-- New button -->
+
+        <!-- Admin only remove button -->
+        <button id="removeButton" onclick="removeFromQueue()" style="display: none;">Remove from Queue</button>
 
         <!-- Admin controls positioned farther down -->
         <div class="admin-controls">
             <input type="password" id="passwordInput" placeholder="Admin Password">
-            <button onclick="verifyAdmin()">Enter</button>
+            <button onclick="verifyAdmin()">Enter Admin Mode</button>
+            <button onclick="exitAdmin()" style="display: none;">Exit Admin Mode</button>
             <p id="errorMessage">Incorrect Password</p>
         </div>
     </div>
@@ -129,18 +133,21 @@
             const name = document.getElementById('nameInput').value;
             if (queue.includes(name) && !isAdmin) {
                 disableButtons();
+                document.getElementById('userMessage').innerText = `${name} added to the queue.`;
+                document.getElementById('userMessage').style.display = 'block';
             }
         }
 
         function disableButtons() {
             document.getElementById('addButton').style.display = 'none';
-            document.getElementById('removeButton').style.display = 'none';
+            document.getElementById('nextPlayerButton').style.display = 'none';
             userAdded = true;
         }
 
         function enableButtons() {
             document.getElementById('addButton').style.display = 'block';
-            document.getElementById('removeButton').style.display = 'block';
+            document.getElementById('nextPlayerButton').style.display = 'block';
+            document.getElementById('userMessage').style.display = 'none';
             userAdded = false;
         }
 
@@ -158,17 +165,17 @@
             }
         }
 
-        // Remove from queue function
+        // Remove from queue function (only available in admin mode)
         async function removeFromQueue() {
             const name = document.getElementById('nameInput').value;
-            if (name) {
+            if (name && isAdmin) {
                 await fetch('/remove', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, admin: isAdmin, password: isAdmin ? adminPassword : '' })
+                    body: JSON.stringify({ name, admin: isAdmin, password: adminPassword })
                 });
                 fetchQueue();
-                if (!isAdmin) enableButtons();
+                enableButtons(); // Show buttons again after removal
             }
         }
 
@@ -189,11 +196,22 @@
                 document.getElementById('errorMessage').style.display = 'none';
                 document.getElementById('passwordInput').style.display = 'none';
                 document.querySelector('button[onclick="verifyAdmin()"]').style.display = 'none';
-                document.getElementById('nameInput').placeholder = "Enter name to edit queue";
+                document.querySelector('button[onclick="exitAdmin()"]').style.display = 'block';
+                document.getElementById('removeButton').style.display = 'block'; // Show remove button for admin
             } else {
                 isAdmin = false;
                 document.getElementById('errorMessage').style.display = 'block';
             }
+        }
+
+        // Exit admin mode
+        function exitAdmin() {
+            isAdmin = false;
+            document.getElementById('passwordInput').style.display = 'block';
+            document.querySelector('button[onclick="verifyAdmin()"]').style.display = 'block';
+            document.querySelector('button[onclick="exitAdmin()"]').style.display = 'none';
+            document.getElementById('removeButton').style.display = 'none';
+            enableButtons(); // Reset to normal mode
         }
 
         fetchQueue();
