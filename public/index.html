@@ -7,24 +7,28 @@
 </head>
 <body>
     <h1>Pool Table Queue</h1>
-    <!-- Changed <ul> to <ol> to show numbers instead of bullets -->
+    <!-- Display queue with numbers -->
     <ol id="queueList"></ol>
-    <input type="text" id="nameInput" placeholder="Enter your name">
-    
-    <!-- Admin login elements -->
-    <input type="password" id="passwordInput" placeholder="Admin Password">
-    <button onclick="verifyAdmin()">Enter</button>
-    <p id="errorMessage" style="color: red; display: none;">Incorrect Password</p>
 
-    <!-- Buttons for queue management -->
+    <!-- Queue management controls -->
+    <input type="text" id="nameInput" placeholder="Enter your name">
     <button id="addButton" onclick="addToQueue()">Add to Queue</button>
     <button id="removeButton" onclick="removeFromQueue()">Remove from Queue</button>
+    <button id="nextPlayerButton" onclick="removeTopPlayer()">Next Player</button> <!-- New button -->
+
+    <!-- Admin controls positioned farther down -->
+    <div style="margin-top: 20px;">
+        <input type="password" id="passwordInput" placeholder="Admin Password">
+        <button onclick="verifyAdmin()">Enter</button>
+        <p id="errorMessage" style="color: red; display: none;">Incorrect Password</p>
+    </div>
 
     <script>
         let isAdmin = false; // Tracks if the user is in admin mode
-        const adminPassword = "123"; // Set your admin password here
+        const adminPassword = "123"; // Admin password is 123
         let userAdded = false;
 
+        // Fetch the queue from the server
         async function fetchQueue() {
             const response = await fetch('/queue');
             const queue = await response.json();
@@ -49,6 +53,7 @@
             userAdded = false;
         }
 
+        // Add to queue function
         async function addToQueue() {
             const name = document.getElementById('nameInput').value;
             if (name && !userAdded) {
@@ -58,10 +63,11 @@
                     body: JSON.stringify({ name, admin: isAdmin, password: isAdmin ? adminPassword : '' })
                 });
                 fetchQueue();
-                if (!isAdmin) disableButtons(); // Disable buttons if not an admin
+                if (!isAdmin) disableButtons();
             }
         }
 
+        // Remove from queue function
         async function removeFromQueue() {
             const name = document.getElementById('nameInput').value;
             if (name) {
@@ -71,7 +77,15 @@
                     body: JSON.stringify({ name, admin: isAdmin, password: isAdmin ? adminPassword : '' })
                 });
                 fetchQueue();
-                if (!isAdmin) enableButtons(); // Re-enable buttons for user
+                if (!isAdmin) enableButtons();
+            }
+        }
+
+        // New function to remove the top player in the queue
+        async function removeTopPlayer() {
+            const response = await fetch('/remove-top', { method: 'POST' });
+            if (response.ok) {
+                fetchQueue();
             }
         }
 
