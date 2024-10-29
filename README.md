@@ -10,3 +10,9 @@ A comprehensive pool website designed to manage a queue for pool players, track 
 - **Tournament Hosting**: Supports the organization and tracking of tournament brackets and player progression.
 - **Real-Time Updates**: Ensures that all data, from queue changes to ELO adjustments, updates in real-time for all users.
 - **Admin Controls**: Special admin features for adding, removing, or editing players, and overseeing tournaments.
+
+Owners - David Mond, Ryan Cooke
+
+Collaborators - 
+
+_~for Delta Sigma Phi_
