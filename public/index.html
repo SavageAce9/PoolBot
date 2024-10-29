@@ -84,7 +84,7 @@
         <div id="homeSection">
             <h1 class="text-center">Welcome to the Pool Table Queue System</h1>
             <p class="text-center">
-                Manage your turn at the pool table efficiently and effortlessly.
+                baby k the goat
             </p>
         </div>
 
@@ -145,6 +145,15 @@
                 <p id="errorMessage" class="text-danger">Incorrect Password</p>
                 <button id="removeButton" class="btn btn-danger btn-block mb-2" onclick="removeFromQueue()" style="display: none;">Remove from Queue</button>
                 <button id="nextPlayerButton" class="btn btn-info btn-block mb-2" onclick="removeTopPlayer()" style="display: none;">Next Player</button>
+                <button class="btn btn-danger btn-block mb-2" onclick="clearQueue()">Clear Queue</button>
+
+                <div class="form-group">
+                    <input type="text" id="searchPlayer" class="form-control" placeholder="Search and select player">
+                </div>
+                <div class="form-group">
+                    <input type="number" id="positionInput" class="form-control" placeholder="Position">
+                </div>
+                <button class="btn btn-secondary btn-block mb-2" onclick="addPlayerAtPosition()">Add Player at Position</button>
             </div>
         </div>
 
@@ -234,8 +243,6 @@
             const username = document.getElementById('loginUsername').value;
             const password = document.getElementById('loginPassword').value;
 
-            console.log(`username: ${username}, password ${password}`);
-
             fetch('/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -244,16 +251,27 @@
             .then(response => response.json())
             .then(data => {
                 if (data.token) {
+                    // Store token and show the queue interface
                     token = data.token;
                     localStorage.setItem('token', token);
-                    showQueueInterface();
+
+                    // Update UI
+                    document.getElementById('navLogin').style.display = 'none';
+                    document.getElementById('navLogout').style.display = 'block';
+                    showQueueInterface();  // Shows the queue interface after login
+
+                    // Start fetching the queue periodically
                     fetchQueue();
                     setInterval(fetchQueue, 2000);
                 } else {
+                    // Display an error message if login fails
                     document.getElementById('loginErrorMessage').innerText = data.message || 'Error logging in.';
                 }
             })
-            .catch(error => console.error(error));
+            .catch(error => {
+                console.error('Login error:', error);
+                document.getElementById('loginErrorMessage').innerText = 'An unexpected error occurred.';
+            });
         }
 
         function logout() {
@@ -293,6 +311,8 @@
                 enableButtons();
             }
         }
+        // Update queue every few seconds
+        setInterval(fetchQueue, 5000); // Adjust interval as needed
 
         function disableButtons() {
             document.getElementById('addButton').style.display = 'none';
@@ -321,39 +341,63 @@
             }
         }
 
-        // Remove from queue function (admin only)
-        async function removeFromQueue() {
-            const name = prompt("Enter the username to remove from the queue:");
-            if (name && isAdmin) {
-                await fetch('/remove', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': 'Bearer ' + token,
-                    },
-                    body: JSON.stringify({ name, admin: isAdmin, password: adminPassword }),
-                });
-                fetchQueue();
-                enableButtons();
-            }
+        async function removeSpecificUser() {
+            const username = prompt("Enter username to remove:");
+            await fetch('/admin/remove', {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer ' + token,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ username }),
+            });
+
+            fetchQueue(); // Refresh queue
         }
 
-        // Function to remove the top player in the queue (admin only)
+        async function clearQueue() {
+            await fetch('/admin/clear', {
+                method: 'POST',
+                headers: {
+                'Authorization': 'Bearer ' + token,
+                'Content-Type': 'application/json',
+                },
+            });
+            fetchQueue(); // Refresh queue
+        }
+
+
+        // Function to remove the top player in the queue
         async function removeTopPlayer() {
-            if (isAdmin) {
-                const response = await fetch('/remove-top', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': 'Bearer ' + token,
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ admin: isAdmin, password: adminPassword }),
-                });
-                if (response.ok) {
-                    fetchQueue();
-                }
+            await fetch('/admin/remove-top', {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer ' + token,
+                    'Content-Type': 'application/json',
+                },
+            });
+            fetchQueue(); // Refresh the queue
+        }
+
+        async function addPlayerAtPosition() {
+            const username = document.getElementById('searchPlayer').value;
+            const position = parseInt(document.getElementById('positionInput').value, 10) - 1;
+
+            const response = await fetch('/admin/add-at-position', {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer ' + token,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ username, position }),
+            });
+            const data = await response.json();
+
+            if (response.ok) {
+                alert(data.message);
+                fetchQueue(); // Refresh queue display
             } else {
-                alert('Admin access required.');
+                alert(data.message || 'Failed to add player at specified position');
             }
         }
 
@@ -395,6 +439,90 @@
             enableButtons();
         }
 
+        let allUsers = [];
+
+        async function fetchAllUsers() {
+            const response = await fetch('/admin/users', {
+                headers: {
+                    'Authorization': 'Bearer ' + token,
+                },
+            });
+            allUsers = await response.json();
+            setupAutocomplete(document.getElementById('searchPlayer'), allUsers);
+        }
+
+        function setupAutocomplete(input, arr) {
+            let currentFocus;
+
+            input.addEventListener("input", function() {
+                let val = this.value;
+                closeAllLists();
+                if (!val) { return false; }
+                currentFocus = -1;
+
+                const listContainer = document.createElement("div");
+                listContainer.setAttribute("id", this.id + "autocomplete-list");
+                listContainer.setAttribute("class", "autocomplete-items");
+                this.parentNode.appendChild(listContainer);
+
+                arr.forEach(user => {
+                    if (user.substr(0, val.length).toUpperCase() === val.toUpperCase()) {
+                        const item = document.createElement("div");
+                        item.innerHTML = "<strong>" + user.substr(0, val.length) + "</strong>";
+                        item.innerHTML += user.substr(val.length);
+                        item.innerHTML += "<input type='hidden' value='" + user + "'>";
+                        item.addEventListener("click", function() {
+                            input.value = this.getElementsByTagName("input")[0].value;
+                            closeAllLists();
+                        });
+                        listContainer.appendChild(item);
+                    }
+                });
+            });
+
+            input.addEventListener("keydown", function(e) {
+                let items = document.getElementById(this.id + "autocomplete-list");
+                if (items) items = items.getElementsByTagName("div");
+                if (e.keyCode === 40) {
+                    currentFocus++;
+                    addActive(items);
+                } else if (e.keyCode === 38) { 
+                    currentFocus--;
+                    addActive(items);
+                } else if (e.keyCode === 13) {
+                    e.preventDefault();
+                    if (currentFocus > -1) {
+                        if (items) items[currentFocus].click();
+                    }
+                }
+            });
+
+            function addActive(items) {
+                if (!items) return false;
+                removeActive(items);
+                if (currentFocus >= items.length) currentFocus = 0;
+                if (currentFocus < 0) currentFocus = items.length - 1;
+                items[currentFocus].classList.add("autocomplete-active");
+            }
+
+            function removeActive(items) {
+                for (const item of items) item.classList.remove("autocomplete-active");
+            }
+
+            function closeAllLists(element) {
+                const items = document.getElementsByClassName("autocomplete-items");
+                for (const item of items) {
+                    if (element != item && element != input) {
+                        item.parentNode.removeChild(item);
+                    }
+                }
+            }
+
+            document.addEventListener("click", function(e) {
+                closeAllLists(e.target);
+            });
+        }
+
         // On page load, check if token exists
         window.onload = function() {
             token = localStorage.getItem('token');
@@ -406,6 +534,49 @@
                 showHome();
             }
         }
+
+        // Check if the token exists and is valid
+        function isAuthenticated() {
+            if (!token) {
+                return false;
+            }
+
+            try {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                // Optionally, you can add token expiration check here
+                return !!payload.username;
+            } catch (e) {
+                return false;
+            }
+        }
+
+        function showQueueInterface() {
+            if (isAuthenticated()) {
+                showSection('queueInterface');
+                document.getElementById('navLogin').style.display = 'none';
+                document.getElementById('navLogout').style.display = 'block';
+            } else {
+                alert('Please log in to access the queue.');
+                showLoginForm();
+            }
+        }
+
+        // Update the onload function to ensure token validity on page load
+        window.onload = function() {
+            token = localStorage.getItem('token');
+            if (isAuthenticated()) {
+                document.getElementById('navLogin').style.display = 'none';
+                document.getElementById('navLogout').style.display = 'block';
+                showHome();
+            } else {
+                // Remove any invalid token and show the login button
+                localStorage.removeItem('token');
+                document.getElementById('navLogin').style.display = 'block';
+                document.getElementById('navLogout').style.display = 'none';
+                showHome();
+            }
+        };
+
     </script>
 </body>
 </html>
