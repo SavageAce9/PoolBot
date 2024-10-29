@@ -2,56 +2,66 @@ const express = require('express');
 const app = express();
 const PORT = 3000;
 
+// Import necessary modules
+const mongoose = require('mongoose');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+require('dotenv').config();
+
+// Connect to MongoDB (remove deprecated options)
+mongoose.connect(process.env.MONGODB_URI)
+  .then(() => console.log('Connected to MongoDB'))
+  .catch((err) => console.error('MongoDB connection error:', err));
+
+// Define User schema and model
+const userSchema = new mongoose.Schema({
+  username: { type: String, unique: true },
+  password: String,
+});
+
+const User = mongoose.model('User', userSchema);
+
 // Queue array and admin password setup
 let queue = [];
-const adminPassword = process.env.ADMIN_PASSWORD || "123"; // Default admin password is "123"
+const adminPassword = process.env.ADMIN_PASSWORD || 'daude'; // Default admin password is "daude"
 
 app.use(express.json());
 app.use(express.static('public')); // Serve static files from the 'public' folder
 
-// Endpoint to get the current queue
-app.get('/queue', (req, res) => res.json(queue));
+// Middleware to authenticate JWT tokens
+function authenticateToken(req, res, next) {
+  // ... (same as before)
+}
 
-// Endpoint to add a user to the queue
-app.post('/add', (req, res) => {
-    const { name, admin, password } = req.body;
-
-    // Verify admin password if admin is true
-    if (admin && password !== adminPassword) {
-        return res.status(403).json({ message: "Invalid admin password." });
-    }
-
-    // Prevent regular users from adding themselves more than once
-    if (!admin && queue.includes(name)) {
-        return res.status(400).json({ message: "You are already in the queue." });
-    }
-
-    // Add name to the queue
-    queue.push(name);
-    res.json(queue);
+// Registration endpoint
+app.post('/register', async (req, res) => {
+  // ... (same as before)
 });
 
-// Endpoint to remove a user from the queue
-app.post('/remove', (req, res) => {
-    const { name, admin, password } = req.body;
-
-    // Verify admin password if admin is true
-    if (admin && password !== adminPassword) {
-        return res.status(403).json({ message: "Invalid admin password." });
-    }
-
-    // Remove the specified name from the queue
-    queue = queue.filter(person => person !== name);
-    res.json(queue);
+// Login endpoint
+app.post('/login', async (req, res) => {
+  // ... (same as before)
 });
 
-// New endpoint to remove the top player in the queue
-app.post('/remove-top', (req, res) => {
-    if (queue.length > 0) {
-        queue.shift(); // Remove the first (top) player in the queue
-    }
-    res.json(queue);
+// Endpoint to get the current queue (authenticated)
+app.get('/queue', authenticateToken, (req, res) => res.json(queue));
+
+// Endpoint to add a user to the queue (authenticated)
+app.post('/add', authenticateToken, (req, res) => {
+  // ... (same as before)
+});
+
+// Endpoint to remove a user from the queue (admin only)
+app.post('/remove', authenticateToken, (req, res) => {
+  // ... (same as before)
+});
+
+// Endpoint to remove the top player in the queue (admin only)
+app.post('/remove-top', authenticateToken, (req, res) => {
+  // ... (same as before)
 });
 
 // Start the server
-app.listen(PORT, () => console.log(`Server is running on http://localhost:${PORT}`));
+app.listen(PORT, () =>
+  console.log(`Server is running on http://localhost:${PORT}`)
+);

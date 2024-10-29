@@ -1,190 +1,369 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <!-- Meta Tags Required for Bootstrap -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pool Table Queue</title>
+    
+    <!-- Bootstrap CSS CDN -->
+    <link
+      rel="stylesheet"
+      href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"
+    />
+
+    <!-- Custom CSS -->
     <style>
-        /* Basic page styling */
         body {
-            font-family: Arial, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            margin: 0;
+            padding-top: 56px; /* Space for the navbar */
             background-color: #f0f2f5;
         }
 
-        /* Container for the entire app */
         .container {
-            width: 100%;
-            max-width: 400px;
-            background: #fff;
-            border-radius: 8px;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-            padding: 20px;
-            text-align: center;
+            max-width: 600px;
+            margin-top: 20px;
         }
 
-        /* Header styling */
-        h1 {
-            color: #333;
-            font-size: 24px;
-            margin-bottom: 20px;
-        }
-
-        /* Styled list with numbering */
-        #queueList {
-            text-align: left;
-            padding: 0;
-            list-style-position: inside;
-            margin-bottom: 20px;
-            color: #333;
-            font-size: 18px;
-        }
-
-        /* Input and button styling */
-        input[type="text"], input[type="password"] {
-            width: calc(100% - 20px);
-            padding: 10px;
-            margin: 10px 0;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            font-size: 16px;
-        }
-
-        button {
-            width: 100%;
-            padding: 10px;
-            font-size: 16px;
-            color: #fff;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            margin-bottom: 10px;
-        }
-
-        #addButton {
-            background-color: #28a745;
-        }
-
-        #removeButton {
-            background-color: #dc3545;
-        }
-
-        #nextPlayerButton {
-            background-color: #007bff;
-        }
-
-        /* Admin button and error message styling */
         .admin-controls {
             margin-top: 30px;
         }
 
-        button[onclick="verifyAdmin()"], button[onclick="exitAdmin()"] {
-            background-color: #6c757d;
+        #errorMessage {
+            display: none;
         }
 
-        #errorMessage {
-            color: red;
-            font-size: 14px;
-            margin-top: 10px;
-            display: none;
+        /* Custom styles for forms */
+        .form-container {
+            margin-top: 30px;
+        }
+
+        .nav-link {
+            cursor: pointer;
         }
     </style>
 </head>
 <body>
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+      <a class="navbar-brand" href="#">Pool Table Queue</a>
+      <button
+        class="navbar-toggler"
+        type="button"
+        data-toggle="collapse"
+        data-target="#navbarNav"
+        aria-controls="navbarNav"
+        aria-expanded="false"
+        aria-label="Toggle navigation"
+      >
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav ml-auto">
+          <li class="nav-item active">
+            <a class="nav-link" onclick="showHome()">Home</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" onclick="showQueueInterface()">Queue</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" onclick="showProfile()">Profile</a>
+          </li>
+          <li class="nav-item" id="navLogin">
+            <a class="nav-link" onclick="showLoginForm()">Login</a>
+          </li>
+          <li class="nav-item" id="navLogout" style="display:none;">
+            <a class="nav-link" onclick="logout()">Logout</a>
+          </li>
+        </ul>
+      </div>
+    </nav>
+
+    <!-- Main Container -->
     <div class="container">
-        <h1>Pool Table Queue</h1>
-        <!-- Display queue with numbers -->
-        <ol id="queueList"></ol>
+        <!-- Home Section -->
+        <div id="homeSection">
+            <h1 class="text-center">Welcome to the Pool Table Queue System</h1>
+            <p class="text-center">
+                Manage your turn at the pool table efficiently and effortlessly.
+            </p>
+        </div>
 
-        <!-- Queue management controls -->
-        <input type="text" id="nameInput" placeholder="Enter your name">
-        <p id="userMessage" style="display: none; font-size: 18px; color: green;"></p>
-        <button id="addButton" onclick="addToQueue()">Add to Queue</button>
-        <button id="nextPlayerButton" onclick="removeTopPlayer()">Next Player</button> <!-- New button -->
+        <!-- Login Form -->
+        <div id="loginForm" style="display:none;">
+            <h2>Login</h2>
+            <div class="form-container">
+                <div class="form-group">
+                    <input type="text" id="loginUsername" class="form-control" placeholder="Username">
+                </div>
+                <div class="form-group">
+                    <input type="password" id="loginPassword" class="form-control" placeholder="Password">
+                </div>
+                <button class="btn btn-primary btn-block" onclick="login()">Login</button>
+                <p class="mt-3">
+                    Don't have an account? <a onclick="showRegisterForm()">Register here</a>
+                </p>
+                <p id="loginErrorMessage" class="text-danger"></p>
+            </div>
+        </div>
 
-        <!-- Admin only remove button -->
-        <button id="removeButton" onclick="removeFromQueue()" style="display: none;">Remove from Queue</button>
+        <!-- Registration Form -->
+        <div id="registerForm" style="display:none;">
+            <h2>Register</h2>
+            <div class="form-container">
+                <div class="form-group">
+                    <input type="text" id="registerUsername" class="form-control" placeholder="Username">
+                </div>
+                <div class="form-group">
+                    <input type="password" id="registerPassword" class="form-control" placeholder="Password">
+                </div>
+                <button class="btn btn-success btn-block" onclick="register()">Register</button>
+                <p class="mt-3">
+                    Already have an account? <a onclick="showLoginForm()">Login here</a>
+                </p>
+                <p id="registerErrorMessage" class="text-danger"></p>
+            </div>
+        </div>
 
-        <!-- Admin controls positioned farther down -->
-        <div class="admin-controls">
-            <input type="password" id="passwordInput" placeholder="Admin Password">
-            <button onclick="verifyAdmin()">Enter Admin Mode</button>
-            <button onclick="exitAdmin()" style="display: none;">Exit Admin Mode</button>
-            <p id="errorMessage">Incorrect Password</p>
+        <!-- Queue Interface -->
+        <div id="queueInterface" style="display:none;">
+            <h2>Current Queue</h2>
+            <!-- Display queue with numbers -->
+            <ol id="queueList" class="list-group mb-4"></ol>
+
+            <!-- Queue management controls -->
+            <p id="userMessage" class="alert alert-success" style="display: none;"></p>
+            <button id="addButton" class="btn btn-primary btn-block mb-2" onclick="addToQueue()">Add to Queue</button>
+            
+            <!-- Admin Controls -->
+            <div class="admin-controls">
+                <h4>Admin Controls</h4>
+                <div class="form-group">
+                    <input type="password" id="passwordInput" class="form-control" placeholder="Admin Password">
+                </div>
+                <button class="btn btn-secondary btn-block mb-2" onclick="verifyAdmin()">Enter Admin Mode</button>
+                <button class="btn btn-warning btn-block mb-2" onclick="exitAdmin()" style="display: none;">Exit Admin Mode</button>
+                <p id="errorMessage" class="text-danger">Incorrect Password</p>
+                <button id="removeButton" class="btn btn-danger btn-block mb-2" onclick="removeFromQueue()" style="display: none;">Remove from Queue</button>
+                <button id="nextPlayerButton" class="btn btn-info btn-block mb-2" onclick="removeTopPlayer()" style="display: none;">Next Player</button>
+            </div>
+        </div>
+
+        <!-- Profile Section -->
+        <div id="profileSection" style="display:none;">
+            <h2>Your Profile</h2>
+            <p>Username: <span id="profileUsername"></span></p>
+            <!-- Additional profile information can be added here -->
         </div>
     </div>
 
+    <!-- Bootstrap JS and Dependencies -->
+    <script
+      src="https://code.jquery.com/jquery-3.5.1.slim.min.js"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"
+      crossorigin="anonymous"
+    ></script>
+
+    <!-- Your Existing Script -->
     <script>
-        let isAdmin = false; // Tracks if the user is in admin mode
-        const adminPassword = "123"; // Admin password is 123
+        let isAdmin = false;
+        const adminPassword = "daude";
         let userAdded = false;
+        let token = '';
+
+        function showSection(sectionId) {
+            const sections = ['homeSection', 'loginForm', 'registerForm', 'queueInterface', 'profileSection'];
+            sections.forEach(id => {
+                document.getElementById(id).style.display = id === sectionId ? 'block' : 'none';
+            });
+        }
+
+        function showHome() {
+            showSection('homeSection');
+        }
+
+        function showLoginForm() {
+            showSection('loginForm');
+            document.getElementById('navLogin').style.display = 'block';
+            document.getElementById('navLogout').style.display = 'none';
+        }
+
+        function showRegisterForm() {
+            showSection('registerForm');
+        }
+
+        function showQueueInterface() {
+            showSection('queueInterface');
+            document.getElementById('navLogin').style.display = 'none';
+            document.getElementById('navLogout').style.display = 'block';
+        }
+
+        function showProfile() {
+            showSection('profileSection');
+            document.getElementById('profileUsername').innerText = getUsernameFromToken();
+        }
+
+        function register() {
+            const username = document.getElementById('registerUsername').value;
+            const password = document.getElementById('registerPassword').value;
+
+            fetch('/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.message === 'User registered successfully.') {
+                    alert('Registration successful! Please login.');
+                    showLoginForm();
+                } else {
+                    document.getElementById('registerErrorMessage').innerText = data.message || 'Error registering user.';
+                }
+            })
+            .catch(error => console.error(error));
+        }
+
+        function login() {
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+
+            console.log(`username: ${username}, password ${password}`);
+
+            fetch('/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.token) {
+                    token = data.token;
+                    localStorage.setItem('token', token);
+                    showQueueInterface();
+                    fetchQueue();
+                    setInterval(fetchQueue, 2000);
+                } else {
+                    document.getElementById('loginErrorMessage').innerText = data.message || 'Error logging in.';
+                }
+            })
+            .catch(error => console.error(error));
+        }
+
+        function logout() {
+            token = '';
+            localStorage.removeItem('token');
+            isAdmin = false;
+            document.getElementById('navLogin').style.display = 'block';
+            document.getElementById('navLogout').style.display = 'none';
+            showHome();
+        }
 
         // Fetch the queue from the server
         async function fetchQueue() {
-            const response = await fetch('/queue');
+            const response = await fetch('/queue', {
+                headers: {
+                    'Authorization': 'Bearer ' + token,
+                },
+            });
             const queue = await response.json();
-            document.getElementById('queueList').innerHTML = queue.map(name => `<li>${name}</li>`).join('');
+            const queueList = document.getElementById('queueList');
+            queueList.innerHTML = '';
+
+            queue.forEach((name, index) => {
+                const listItem = document.createElement('li');
+                listItem.className = 'list-group-item';
+                listItem.textContent = `${index + 1}. ${name}`;
+                queueList.appendChild(listItem);
+            });
 
             // Check if the user's name is already in the queue
-            const name = document.getElementById('nameInput').value;
-            if (queue.includes(name) && !isAdmin) {
+            const username = getUsernameFromToken();
+            if (queue.includes(username) && !isAdmin) {
                 disableButtons();
-                document.getElementById('userMessage').innerText = `${name} added to the queue.`;
+                document.getElementById('userMessage').innerText = `You are in the queue at position ${queue.indexOf(username) + 1}.`;
                 document.getElementById('userMessage').style.display = 'block';
+            } else {
+                enableButtons();
             }
         }
 
         function disableButtons() {
             document.getElementById('addButton').style.display = 'none';
-            document.getElementById('nextPlayerButton').style.display = 'none';
             userAdded = true;
         }
 
         function enableButtons() {
             document.getElementById('addButton').style.display = 'block';
-            document.getElementById('nextPlayerButton').style.display = 'block';
             document.getElementById('userMessage').style.display = 'none';
             userAdded = false;
         }
 
         // Add to queue function
         async function addToQueue() {
-            const name = document.getElementById('nameInput').value;
-            if (name && !userAdded) {
+            if (!userAdded) {
                 await fetch('/add', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, admin: isAdmin, password: isAdmin ? adminPassword : '' })
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + token,
+                    },
+                    body: JSON.stringify({ admin: isAdmin, password: isAdmin ? adminPassword : '' }),
                 });
                 fetchQueue();
                 if (!isAdmin) disableButtons();
             }
         }
 
-        // Remove from queue function (only available in admin mode)
+        // Remove from queue function (admin only)
         async function removeFromQueue() {
-            const name = document.getElementById('nameInput').value;
+            const name = prompt("Enter the username to remove from the queue:");
             if (name && isAdmin) {
                 await fetch('/remove', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, admin: isAdmin, password: adminPassword })
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + token,
+                    },
+                    body: JSON.stringify({ name, admin: isAdmin, password: adminPassword }),
                 });
                 fetchQueue();
-                enableButtons(); // Show buttons again after removal
+                enableButtons();
             }
         }
 
-        // New function to remove the top player in the queue
+        // Function to remove the top player in the queue (admin only)
         async function removeTopPlayer() {
-            const response = await fetch('/remove-top', { method: 'POST' });
-            if (response.ok) {
-                fetchQueue();
+            if (isAdmin) {
+                const response = await fetch('/remove-top', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + token,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ admin: isAdmin, password: adminPassword }),
+                });
+                if (response.ok) {
+                    fetchQueue();
+                }
+            } else {
+                alert('Admin access required.');
             }
+        }
+
+        // Function to get the username from the token
+        function getUsernameFromToken() {
+            if (token) {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                return payload.username;
+            }
+            return null;
         }
 
         // Verify admin password function
@@ -197,7 +376,8 @@
                 document.getElementById('passwordInput').style.display = 'none';
                 document.querySelector('button[onclick="verifyAdmin()"]').style.display = 'none';
                 document.querySelector('button[onclick="exitAdmin()"]').style.display = 'block';
-                document.getElementById('removeButton').style.display = 'block'; // Show remove button for admin
+                document.getElementById('removeButton').style.display = 'block';
+                document.getElementById('nextPlayerButton').style.display = 'block';
             } else {
                 isAdmin = false;
                 document.getElementById('errorMessage').style.display = 'block';
@@ -211,11 +391,21 @@
             document.querySelector('button[onclick="verifyAdmin()"]').style.display = 'block';
             document.querySelector('button[onclick="exitAdmin()"]').style.display = 'none';
             document.getElementById('removeButton').style.display = 'none';
-            enableButtons(); // Reset to normal mode
+            document.getElementById('nextPlayerButton').style.display = 'none';
+            enableButtons();
         }
 
-        fetchQueue();
-        setInterval(fetchQueue, 2000); // Refresh every 2 seconds for real-time updates
+        // On page load, check if token exists
+        window.onload = function() {
+            token = localStorage.getItem('token');
+            if (token) {
+                document.getElementById('navLogin').style.display = 'none';
+                document.getElementById('navLogout').style.display = 'block';
+                showHome();
+            } else {
+                showHome();
+            }
+        }
     </script>
 </body>
 </html>
