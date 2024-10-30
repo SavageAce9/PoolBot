@@ -259,10 +259,6 @@
                     document.getElementById('navLogin').style.display = 'none';
                     document.getElementById('navLogout').style.display = 'block';
                     showQueueInterface();  // Shows the queue interface after login
-
-                    // Start fetching the queue periodically
-                    fetchQueue();
-                    setInterval(fetchQueue, 2000);
                 } else {
                     // Display an error message if login fails
                     document.getElementById('loginErrorMessage').innerText = data.message || 'Error logging in.';
@@ -291,6 +287,7 @@
                 },
             });
             const queue = await response.json();
+            console.log("Queue data:", queue);
             const queueList = document.getElementById('queueList');
             queueList.innerHTML = '';
 
@@ -311,8 +308,6 @@
                 enableButtons();
             }
         }
-        // Update queue every few seconds
-        setInterval(fetchQueue, 5000); // Adjust interval as needed
 
         function disableButtons() {
             document.getElementById('addButton').style.display = 'none';
