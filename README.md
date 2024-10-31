@@ -13,7 +13,7 @@ A comprehensive pool website designed to manage a queue for pool players, track 
 
 Owners - David Mond, Ryan Cooke
 
-Collaborators - Arnav Ganguly
+Collaborators - Arnav Ganguly, Nikhil Vasudeva
 
 _~for Delta Sigma Phi_
 (PROJECT IN PROGRESS)
