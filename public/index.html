@@ -26,6 +26,7 @@
 
         .admin-controls {
             margin-top: 30px;
+            display: none;
         }
 
         #errorMessage {
@@ -39,6 +40,37 @@
 
         .nav-link {
             cursor: pointer;
+        }
+
+        /* Autocomplete styles */
+        .autocomplete-items {
+          position: relative;
+          border: 1px solid #d4d4d4;
+          border-bottom: none;
+          border-top: none;
+          z-index: 99;
+          /* position the autocomplete items to be the same width as the container: */
+          top: 100%;
+          left: 0;
+          right: 0;
+        }
+
+        .autocomplete-items div {
+          padding: 10px;
+          cursor: pointer;
+          background-color: #fff; 
+          border-bottom: 1px solid #d4d4d4; 
+        }
+
+        .autocomplete-items div:hover {
+          /* when hovering an item: */
+          background-color: #e9e9e9; 
+        }
+
+        .autocomplete-active {
+          /* when navigating through the items using the arrow keys: */
+          background-color: DodgerBlue !important; 
+          color: #ffffff; 
         }
     </style>
 </head>
@@ -137,14 +169,8 @@
             <!-- Admin Controls -->
             <div class="admin-controls">
                 <h4>Admin Controls</h4>
-                <div class="form-group">
-                    <input type="password" id="passwordInput" class="form-control" placeholder="Admin Password">
-                </div>
-                <button class="btn btn-secondary btn-block mb-2" onclick="verifyAdmin()">Enter Admin Mode</button>
-                <button class="btn btn-warning btn-block mb-2" onclick="exitAdmin()" style="display: none;">Exit Admin Mode</button>
-                <p id="errorMessage" class="text-danger">Incorrect Password</p>
-                <button id="removeButton" class="btn btn-danger btn-block mb-2" onclick="removeFromQueue()" style="display: none;">Remove from Queue</button>
-                <button id="nextPlayerButton" class="btn btn-info btn-block mb-2" onclick="removeTopPlayer()" style="display: none;">Next Player</button>
+                <button id="nextPlayerButton" class="btn btn-info btn-block mb-2" onclick="removeTopPlayer()">Next Player</button>
+                <button id="removeButton" class="btn btn-danger btn-block mb-2" onclick="removeSpecificUser()">Remove Specific User</button>
                 <button class="btn btn-danger btn-block mb-2" onclick="clearQueue()">Clear Queue</button>
 
                 <div class="form-group">
@@ -179,10 +205,9 @@
       crossorigin="anonymous"
     ></script>
 
-    <!-- Your Existing Script -->
+    <!-- Client-Side Script -->
     <script>
         let isAdmin = false;
-        const adminPassword = "daude";
         let userAdded = false;
         let token = '';
 
@@ -208,14 +233,20 @@
         }
 
         function showQueueInterface() {
-            showSection('queueInterface');
-            document.getElementById('navLogin').style.display = 'none';
-            document.getElementById('navLogout').style.display = 'block';
+            if (isAuthenticated()) {
+                showSection('queueInterface');
+                document.getElementById('navLogin').style.display = 'none';
+                document.getElementById('navLogout').style.display = 'block';
+                fetchQueue(); // Fetch and display the queue
+            } else {
+                alert('Please log in to access the queue.');
+                showLoginForm();
+            }
         }
 
         function showProfile() {
             showSection('profileSection');
-            document.getElementById('profileUsername').innerText = getUsernameFromToken();
+            document.getElementById('profileUsername').innerText = getUserInfoFromToken().username;
         }
 
         function register() {
@@ -255,6 +286,9 @@
                     token = data.token;
                     localStorage.setItem('token', token);
 
+                    const userInfo = getUserInfoFromToken();
+                    isAdmin = userInfo.isAdmin;
+
                     // Update UI
                     document.getElementById('navLogin').style.display = 'none';
                     document.getElementById('navLogout').style.display = 'block';
@@ -286,6 +320,13 @@
                     'Authorization': 'Bearer ' + token,
                 },
             });
+
+            if (response.status === 401 || response.status === 403) {
+                alert('Session expired. Please log in again.');
+                logout();
+                return;
+            }
+
             const queue = await response.json();
             console.log("Queue data:", queue);
             const queueList = document.getElementById('queueList');
@@ -299,13 +340,21 @@
             });
 
             // Check if the user's name is already in the queue
-            const username = getUsernameFromToken();
+            const username = getUserInfoFromToken().username;
             if (queue.includes(username) && !isAdmin) {
                 disableButtons();
                 document.getElementById('userMessage').innerText = `You are in the queue at position ${queue.indexOf(username) + 1}.`;
                 document.getElementById('userMessage').style.display = 'block';
             } else {
                 enableButtons();
+            }
+
+            // Display admin controls if user is admin
+            if (isAdmin) {
+                document.querySelector('.admin-controls').style.display = 'block';
+                fetchAllUsers(); // Fetch all users for autocomplete
+            } else {
+                document.querySelector('.admin-controls').style.display = 'none';
             }
         }
 
@@ -322,23 +371,40 @@
 
         // Add to queue function
         async function addToQueue() {
-            if (!userAdded) {
-                await fetch('/add', {
+            try {
+                const response = await fetch('/add', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': 'Bearer ' + token,
                     },
-                    body: JSON.stringify({ admin: isAdmin, password: isAdmin ? adminPassword : '' }),
                 });
+
+                if (!response.ok) {
+                    // If the response status is not 200-299, handle it here
+                    const errorData = await response.json();
+                    if (response.status === 400) {
+                        // Specific handling for 400 status
+                        alert(errorData.message || 'You are already in the queue.');
+                        return;
+                    }
+                    // Generic handling for other errors
+                    throw new Error(errorData.message || 'Something went wrong');
+                }
+
+                // If the request was successful, refresh the queue and update the UI
                 fetchQueue();
                 if (!isAdmin) disableButtons();
+
+            } catch (error) {
+                console.error('Error adding to queue:', error);
+                alert(error.message);
             }
         }
 
         async function removeSpecificUser() {
             const username = prompt("Enter username to remove:");
-            await fetch('/admin/remove', {
+            const response = await fetch('/admin/remove', {
                 method: 'POST',
                 headers: {
                     'Authorization': 'Bearer ' + token,
@@ -346,37 +412,55 @@
                 },
                 body: JSON.stringify({ username }),
             });
+            const data = await response.json();
 
-            fetchQueue(); // Refresh queue
+            if (!response.ok) {
+                alert(data.message || 'Failed to remove user');
+            } else {
+                alert(data.message);
+                fetchQueue(); // Refresh queue
+            }
         }
 
         async function clearQueue() {
-            await fetch('/admin/clear', {
+            const response = await fetch('/admin/clear', {
                 method: 'POST',
                 headers: {
                 'Authorization': 'Bearer ' + token,
                 'Content-Type': 'application/json',
                 },
             });
-            fetchQueue(); // Refresh queue
+            const data = await response.json();
+
+            if (!response.ok) {
+                alert(data.message || 'Failed to clear queue');
+            } else {
+                alert(data.message);
+                fetchQueue(); // Refresh queue
+            }
         }
 
-
-        // Function to remove the top player in the queue
         async function removeTopPlayer() {
-            await fetch('/admin/remove-top', {
+            const response = await fetch('/admin/remove-top', {
                 method: 'POST',
                 headers: {
                     'Authorization': 'Bearer ' + token,
                     'Content-Type': 'application/json',
                 },
             });
-            fetchQueue(); // Refresh the queue
+            const data = await response.json();
+
+            if (!response.ok) {
+                alert(data.message || 'Failed to remove top player');
+            } else {
+                alert(data.message);
+                fetchQueue(); // Refresh the queue
+            }
         }
 
         async function addPlayerAtPosition() {
             const username = document.getElementById('searchPlayer').value;
-            const position = parseInt(document.getElementById('positionInput').value, 10) - 1;
+            const position = parseInt(document.getElementById('positionInput').value, 10);
 
             const response = await fetch('/admin/add-at-position', {
                 method: 'POST',
@@ -396,42 +480,13 @@
             }
         }
 
-        // Function to get the username from the token
-        function getUsernameFromToken() {
+        // Function to get the user info from the token
+        function getUserInfoFromToken() {
             if (token) {
                 const payload = JSON.parse(atob(token.split('.')[1]));
-                return payload.username;
+                return { username: payload.username, isAdmin: payload.isAdmin || false };
             }
-            return null;
-        }
-
-        // Verify admin password function
-        function verifyAdmin() {
-            const enteredPassword = document.getElementById('passwordInput').value;
-
-            if (enteredPassword === adminPassword) {
-                isAdmin = true;
-                document.getElementById('errorMessage').style.display = 'none';
-                document.getElementById('passwordInput').style.display = 'none';
-                document.querySelector('button[onclick="verifyAdmin()"]').style.display = 'none';
-                document.querySelector('button[onclick="exitAdmin()"]').style.display = 'block';
-                document.getElementById('removeButton').style.display = 'block';
-                document.getElementById('nextPlayerButton').style.display = 'block';
-            } else {
-                isAdmin = false;
-                document.getElementById('errorMessage').style.display = 'block';
-            }
-        }
-
-        // Exit admin mode
-        function exitAdmin() {
-            isAdmin = false;
-            document.getElementById('passwordInput').style.display = 'block';
-            document.querySelector('button[onclick="verifyAdmin()"]').style.display = 'block';
-            document.querySelector('button[onclick="exitAdmin()"]').style.display = 'none';
-            document.getElementById('removeButton').style.display = 'none';
-            document.getElementById('nextPlayerButton').style.display = 'none';
-            enableButtons();
+            return { username: null, isAdmin: false };
         }
 
         let allUsers = [];
@@ -518,60 +573,44 @@
             });
         }
 
-        // On page load, check if token exists
-        window.onload = function() {
-            token = localStorage.getItem('token');
-            if (token) {
-                document.getElementById('navLogin').style.display = 'none';
-                document.getElementById('navLogout').style.display = 'block';
-                showHome();
-            } else {
-                showHome();
-            }
-        }
-
         // Check if the token exists and is valid
         function isAuthenticated() {
             if (!token) {
-                return false;
+                token = localStorage.getItem('token');
             }
+            if (!token) return false;
 
             try {
                 const payload = JSON.parse(atob(token.split('.')[1]));
-                // Optionally, you can add token expiration check here
-                return !!payload.username;
+                const expiration = payload.exp * 1000;
+                if (Date.now() >= expiration) {
+                    // Token expired
+                    logout();
+                    return false;
+                }
+                return true;
             } catch (e) {
                 return false;
             }
         }
 
-        function showQueueInterface() {
-            if (isAuthenticated()) {
-                showSection('queueInterface');
-                document.getElementById('navLogin').style.display = 'none';
-                document.getElementById('navLogout').style.display = 'block';
-            } else {
-                alert('Please log in to access the queue.');
-                showLoginForm();
-            }
-        }
-
-        // Update the onload function to ensure token validity on page load
+        // On page load, check if token exists
         window.onload = function() {
-            token = localStorage.getItem('token');
             if (isAuthenticated()) {
+                const userInfo = getUserInfoFromToken();
+                isAdmin = userInfo.isAdmin;
                 document.getElementById('navLogin').style.display = 'none';
                 document.getElementById('navLogout').style.display = 'block';
-                showHome();
+
+                showQueueInterface();
+                // fetchQueue(); // fetchQueue() is called within showQueueInterface()
             } else {
-                // Remove any invalid token and show the login button
                 localStorage.removeItem('token');
                 document.getElementById('navLogin').style.display = 'block';
                 document.getElementById('navLogout').style.display = 'none';
                 showHome();
             }
         };
-
     </script>
 </body>
 </html>

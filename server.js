@@ -1,3 +1,4 @@
+// server.js
 const express = require('express');
 const app = express();
 const PORT = 3000;
@@ -20,8 +21,15 @@ const userSchema = new mongoose.Schema({
 
 const User = mongoose.model('User', userSchema);
 
-// Queue array and admin password setup
-let queue = [];
+// Define QueueItem schema and model
+const queueItemSchema = new mongoose.Schema({
+  username: String,
+  position: Number,
+});
+
+const QueueItem = mongoose.model('QueueItem', queueItemSchema);
+
+// Admin password setup
 const adminPassword = process.env.ADMIN_PASSWORD || 'daude'; // Default admin password
 
 // Middleware to parse JSON bodies
@@ -43,105 +51,162 @@ function authenticateToken(req, res, next) {
   });
 }
 
+// Middleware to authenticate admin users
+function authenticateAdmin(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return res.status(401).json({ message: 'Token required' });
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (decoded && decoded.isAdmin) {
+      req.user = decoded;
+      next();
+    } else {
+      res.status(403).json({ message: 'Admin access required' });
+    }
+  } catch (err) {
+    res.status(403).json({ message: 'Invalid token' });
+  }
+}
+
 // Registration endpoint
 app.post('/register', async (req, res) => {
   try {
     const { username, password } = req.body;
+    if (username.toLowerCase() === 'admin') {
+      return res.status(400).json({ message: 'Username not allowed' });
+    }
+
+    if (!username || username.length < 3) {
+      return res.status(400).json({ message: 'Username must be at least 3 characters long' });
+    }
+
+    if (!password || password.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters long' });
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = new User({ username, password:hashedPassword });
     await user.save();
     res.json({ message: 'User registered successfully.' });
   } catch (err) {
-    res.status(500).json({ message: 'Error registering user.' });
+    if (err.code === 11000) {
+      res.status(400).json({ message: 'Username already exists' });
+    } else {
+      res.status(500).json({ message: 'Error registering user.' });
+    }
   }
 });
 
 // Login endpoint
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
-  const user = await User.findOne({ username });
 
-  if (user && await bcrypt.compare(password, user.password)) {
-    const token = jwt.sign({ username: user.username }, process.env.JWT_SECRET);
+  if (username === 'admin' && password === adminPassword) {
+    const token = jwt.sign({ username: 'admin', isAdmin: true }, process.env.JWT_SECRET, { expiresIn: '1h' });
     res.json({ token });
   } else {
-    res.status(401).json({ message: 'Invalid username or password' });
+    const user = await User.findOne({ username });
+
+    if (user && await bcrypt.compare(password, user.password)) {
+      const token = jwt.sign({ username: user.username, isAdmin: false }, process.env.JWT_SECRET, { expiresIn: '1h' });
+      res.json({ token });
+    } else {
+      res.status(401).json({ message: 'Invalid username or password' });
+    }
   }
 });
 
 // Endpoint to get the current queue (authenticated)
-app.get('/queue', authenticateToken, (req, res) => {
-  res.json(queue);
+app.get('/queue', authenticateToken, async (req, res) => {
+  const queue = await QueueItem.find().sort({ position: 1 });
+  res.json(queue.map(item => item.username));
 });
 
 // Endpoint to add a user to the queue (authenticated)
-app.post('/add', authenticateToken, (req, res) => {
+app.post('/add', authenticateToken, async (req, res) => {
   const username = req.user.username;
 
-  if (queue.includes(username)) {
+  const existingItem = await QueueItem.findOne({ username });
+  if (existingItem) {
     return res.status(400).json({ message: 'You are already in the queue.' });
   }
 
-  queue.push(username);
+  const lastItem = await QueueItem.findOne().sort({ position: -1 });
+  const newPosition = lastItem ? lastItem.position + 1 : 1;
+
+  const queueItem = new QueueItem({ username, position: newPosition });
+  await queueItem.save();
   res.json({ message: `${username} added to the queue.` });
 });
 
-// Middleware to check for admin privileges
-function authenticateAdmin(req, res, next) {
-  const token = req.headers['authorization']?.split(' ')[1];
-  const decoded = jwt.verify(token, process.env.JWT_SECRET);
-  if (decoded && decoded.isAdmin) {
-      req.user = decoded;
-      next();
-  } else {
-      res.status(403).json({ message: 'Admin access required' });
-  }
-}
-
 // Remove specific user (admin only)
-app.post('/admin/remove', authenticateAdmin, (req, res) => {
+app.post('/admin/remove', authenticateAdmin, async (req, res) => {
   const { username } = req.body;
-  const index = queue.indexOf(username);
-  if (index !== -1) {
-      queue.splice(index, 1);
-      res.json({ message: `${username} removed from queue by admin` });
+  const deletedItem = await QueueItem.findOneAndDelete({ username });
+  if (deletedItem) {
+    // Reorder positions
+    await QueueItem.updateMany(
+      { position: { $gt: deletedItem.position } },
+      { $inc: { position: -1 } }
+    );
+    res.json({ message: `${username} removed from queue by admin` });
   } else {
-      res.status(400).json({ message: 'User not in queue' });
+    res.status(400).json({ message: 'User not in queue' });
   }
 });
 
 // Clear queue (admin only)
-app.post('/admin/clear', authenticateAdmin, (req, res) => {
-  queue = [];
+app.post('/admin/clear', authenticateAdmin, async (req, res) => {
+  await QueueItem.deleteMany({});
   res.json({ message: 'Queue cleared by admin' });
 });
 
 // Endpoint to remove the top player in the queue (admin only)
-app.post('/admin/remove-top', authenticateToken, (req, res) => {
-  const { password } = req.body;
-
-  if (queue.length === 0) {
+app.post('/admin/remove-top', authenticateAdmin, async (req, res) => {
+  const topItem = await QueueItem.findOne().sort({ position: 1 });
+  if (!topItem) {
     return res.status(400).json({ message: 'The queue is empty.' });
   }
 
-  const removedUser = queue.shift();
-  res.json({ message: `${removedUser} removed from the queue.` });
+  await QueueItem.deleteOne({ _id: topItem._id });
+  // Reorder positions
+  await QueueItem.updateMany(
+    { position: { $gt: topItem.position } },
+    { $inc: { position: -1 } }
+  );
+
+  res.json({ message: `${topItem.username} removed from the queue.` });
 });
 
 // Add a user at a specified position (admin only)
 app.post('/admin/add-at-position', authenticateAdmin, async (req, res) => {
   const { username, position } = req.body;
 
-  if (queue.includes(username)) {
-      return res.status(400).json({ message: 'User already in queue' });
+  if (!Number.isInteger(position) || position < 1) {
+    return res.status(400).json({ message: 'Invalid position' });
   }
 
-  if (position < 0 || position > queue.length) {
-      return res.status(400).json({ message: 'Invalid position' });
+  const existingItem = await QueueItem.findOne({ username });
+  if (existingItem) {
+    return res.status(400).json({ message: 'User already in queue' });
   }
 
-  queue.splice(position, 0, username); // Insert the user at the specified position
-  res.json({ message: `${username} added to queue at position ${position + 1}` });
+  const queueLength = await QueueItem.countDocuments();
+  if (position > queueLength + 1) {
+    return res.status(400).json({ message: 'Position out of bounds' });
+  }
+
+  // Increment positions of items at or after the specified position
+  await QueueItem.updateMany(
+    { position: { $gte: position } },
+    { $inc: { position: 1 } }
+  );
+
+  const queueItem = new QueueItem({ username, position });
+  await queueItem.save();
+  res.json({ message: `${username} added to queue at position ${position}` });
 });
 
 // Get all users (admin only)
@@ -149,10 +214,6 @@ app.get('/admin/users', authenticateAdmin, async (req, res) => {
   const users = await User.find({}, 'username'); // Retrieve only usernames
   res.json(users.map(user => user.username));
 });
-
-
-// Endpoint to update the queue in real time
-app.get('/queue', authenticateToken, (req, res) => res.json(queue));
 
 // Start the server
 app.listen(PORT, () => {
