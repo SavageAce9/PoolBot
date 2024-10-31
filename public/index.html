@@ -72,12 +72,17 @@
           background-color: DodgerBlue !important; 
           color: #ffffff; 
         }
+
+        /* Highlight top two players */
+        .on-table {
+            background-color: #d4edda !important;
+        }
     </style>
 </head>
 <body>
     <!-- Navigation Bar -->
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
-      <a class="navbar-brand" href="#">Pool Table Queue</a>
+      <a class="navbar-brand" href="#">Delta Sig Pool</a>
       <button
         class="navbar-toggler"
         type="button"
@@ -98,6 +103,9 @@
             <a class="nav-link" onclick="showQueueInterface()">Queue</a>
           </li>
           <li class="nav-item">
+            <a class="nav-link" onclick="showStats()">Stats</a>
+          </li>
+          <li class="nav-item">
             <a class="nav-link" onclick="showProfile()">Profile</a>
           </li>
           <li class="nav-item" id="navLogin">
@@ -114,10 +122,18 @@
     <div class="container">
         <!-- Home Section -->
         <div id="homeSection">
-            <h1 class="text-center">Welcome to the Pool Table Queue System</h1>
+            <h1 class="text-center">Welcome to the Delta Sig Pool Table</h1>
             <p class="text-center">
                 baby k the goat
             </p>
+            <!-- Start of new content -->
+            <div class="text-center">
+                <img src="path_to_your_image.jpg" alt="Pool Table" class="img-fluid" style="max-width: 400px;">
+            </div>
+            <p class="text-center mt-4">
+                delta sig 8 ball
+            </p>
+            <!-- End of new content -->
         </div>
 
         <!-- Login Form -->
@@ -165,7 +181,23 @@
             <!-- Queue management controls -->
             <p id="userMessage" class="alert alert-success" style="display: none;"></p>
             <button id="addButton" class="btn btn-primary btn-block mb-2" onclick="addToQueue()">Add to Queue</button>
-            
+
+            <!-- Report Game Button -->
+            <div id="reportGameSection" style="display:none;">
+                <h4>Report Game Result</h4>
+                <form id="reportGameForm">
+                    <div class="form-group">
+                        <label for="winnerSelect">Winner:</label>
+                        <select id="winnerSelect" class="form-control"></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="loserSelect">Loser:</label>
+                        <select id="loserSelect" class="form-control"></select>
+                    </div>
+                    <button type="button" class="btn btn-success btn-block" onclick="reportGame()">Report Game</button>
+                </form>
+            </div>
+
             <!-- Admin Controls -->
             <div class="admin-controls">
                 <h4>Admin Controls</h4>
@@ -187,7 +219,28 @@
         <div id="profileSection" style="display:none;">
             <h2>Your Profile</h2>
             <p>Username: <span id="profileUsername"></span></p>
-            <!-- Additional profile information can be added here -->
+            <p>Wins: <span id="profileWins"></span></p>
+            <p>Losses: <span id="profileLosses"></span></p>
+            <p>Win Ratio: <span id="profileWinRatio"></span></p>
+        </div>
+
+        <!-- Stats Section -->
+        <div id="statsSection" style="display:none;">
+            <h2>Leaderboard</h2>
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Rank</th>
+                        <th>Username</th>
+                        <th>Wins</th>
+                        <th>Losses</th>
+                        <th>Win Ratio</th>
+                    </tr>
+                </thead>
+                <tbody id="leaderboardTable">
+                    <!-- Leaderboard data will be inserted here -->
+                </tbody>
+            </table>
         </div>
     </div>
 
@@ -212,7 +265,7 @@
         let token = '';
 
         function showSection(sectionId) {
-            const sections = ['homeSection', 'loginForm', 'registerForm', 'queueInterface', 'profileSection'];
+            const sections = ['homeSection', 'loginForm', 'registerForm', 'queueInterface', 'profileSection', 'statsSection'];
             sections.forEach(id => {
                 document.getElementById(id).style.display = id === sectionId ? 'block' : 'none';
             });
@@ -246,7 +299,12 @@
 
         function showProfile() {
             showSection('profileSection');
-            document.getElementById('profileUsername').innerText = getUserInfoFromToken().username;
+            fetchProfile();
+        }
+
+        function showStats() {
+            showSection('statsSection');
+            fetchLeaderboard();
         }
 
         function register() {
@@ -336,6 +394,12 @@
                 const listItem = document.createElement('li');
                 listItem.className = 'list-group-item';
                 listItem.textContent = `${index + 1}. ${name}`;
+
+                // Highlight top two players
+                if (index < 2) {
+                    listItem.classList.add('on-table');
+                }
+
                 queueList.appendChild(listItem);
             });
 
@@ -347,6 +411,13 @@
                 document.getElementById('userMessage').style.display = 'block';
             } else {
                 enableButtons();
+            }
+
+            // Show Report Game section if user is one of the top two players
+            if (queue.slice(0, 2).includes(username)) {
+                showReportGameSection(queue.slice(0, 2));
+            } else {
+                hideReportGameSection();
             }
 
             // Display admin controls if user is admin
@@ -603,7 +674,6 @@
                 document.getElementById('navLogout').style.display = 'block';
 
                 showQueueInterface();
-                // fetchQueue(); // fetchQueue() is called within showQueueInterface()
             } else {
                 localStorage.removeItem('token');
                 document.getElementById('navLogin').style.display = 'block';
@@ -611,6 +681,116 @@
                 showHome();
             }
         };
+
+        // Fetch and display user profile
+        async function fetchProfile() {
+            const response = await fetch('/profile', {
+                headers: {
+                    'Authorization': 'Bearer ' + token,
+                },
+            });
+
+            if (response.ok) {
+                const user = await response.json();
+                document.getElementById('profileUsername').innerText = user.username;
+                document.getElementById('profileWins').innerText = user.wins || 0;
+                document.getElementById('profileLosses').innerText = user.losses || 0;
+                document.getElementById('profileWinRatio').innerText = user.winRatio
+                    ? (user.winRatio * 100).toFixed(2) + '%'
+                    : '0%';
+            } else {
+                alert('Failed to load profile.');
+            }
+        }
+
+        // Fetch and display leaderboard
+        async function fetchLeaderboard() {
+            const response = await fetch('/leaderboard', {
+                headers: {
+                    'Authorization': 'Bearer ' + token,
+                },
+            });
+
+            if (response.ok) {
+                const users = await response.json();
+                const leaderboardTable = document.getElementById('leaderboardTable');
+                leaderboardTable.innerHTML = '';
+
+                users.forEach((user, index) => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${index + 1}</td>
+                        <td>${user.username}</td>
+                        <td>${user.wins || 0}</td>
+                        <td>${user.losses || 0}</td>
+                        <td>${user.winRatio ? (user.winRatio * 100).toFixed(2) + '%' : '0%'}</td>
+                    `;
+                    leaderboardTable.appendChild(row);
+                });
+            } else {
+                alert('Failed to load leaderboard.');
+            }
+        }
+
+        // Show Report Game section
+        function showReportGameSection(topPlayers) {
+            const reportGameSection = document.getElementById('reportGameSection');
+            reportGameSection.style.display = 'block';
+
+            const winnerSelect = document.getElementById('winnerSelect');
+            const loserSelect = document.getElementById('loserSelect');
+
+            // Clear existing options
+            winnerSelect.innerHTML = '';
+            loserSelect.innerHTML = '';
+
+            // Populate options with top two players
+            topPlayers.forEach(player => {
+                const winnerOption = document.createElement('option');
+                winnerOption.value = player;
+                winnerOption.text = player;
+                winnerSelect.appendChild(winnerOption);
+
+                const loserOption = document.createElement('option');
+                loserOption.value = player;
+                loserOption.text = player;
+                loserSelect.appendChild(loserOption);
+            });
+        }
+
+        function hideReportGameSection() {
+            const reportGameSection = document.getElementById('reportGameSection');
+            reportGameSection.style.display = 'none';
+        }
+
+        // Report game result
+        async function reportGame() {
+            const winner = document.getElementById('winnerSelect').value;
+            const loser = document.getElementById('loserSelect').value;
+
+            if (winner === loser) {
+                alert('Winner and loser cannot be the same person.');
+                return;
+            }
+
+            const response = await fetch('/report-game', {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer ' + token,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ winner, loser }),
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                alert(data.message);
+                fetchQueue(); // Refresh the queue
+            } else {
+                alert(data.message || 'Failed to report game.');
+            }
+        }
     </script>
 </body>
 </html>
